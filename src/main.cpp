@@ -12,7 +12,7 @@
 using namespace std;
 
 // Global variables
-queue<string> inFiles;
+queue<pair<string, int>> inFiles;
 vector<pair<string, int>> partialResult;
 pthread_barrier_t barrier;
 pthread_mutex_t list_file_mutex, add_sol_mutex;
@@ -35,12 +35,14 @@ void *threadFunction(void *arg) {
     if (thread_id < numMap) {
         while (true) {
             string fileName;
+            int index;
             pthread_mutex_lock(&list_file_mutex);
             if (inFiles.empty()) {
                 pthread_mutex_unlock(&list_file_mutex);
                 break;
             }
-            fileName = inFiles.front();
+            fileName = inFiles.front().first;
+            index = inFiles.front().second;
             inFiles.pop();
             pthread_mutex_unlock(&list_file_mutex);
             ifstream fin(fileName);
@@ -50,11 +52,11 @@ void *threadFunction(void *arg) {
                 string normalized;
                 for (char c : word) {
                     if (std::isalpha(c)) {
-                        normalized += std::tolower(c);
+                        normalized += string(1,tolower(c));
                     }
                 }
                 if (normalized.size() > 0) {
-                    localResult.push_back(make_pair(normalized, 1));
+                    localResult.push_back(make_pair(normalized, index));
                 }
             }
             pthread_mutex_lock(&add_sol_mutex);
@@ -64,8 +66,9 @@ void *threadFunction(void *arg) {
     }
     pthread_barrier_wait(&barrier);
     if (thread_id >= numMap) {
-        map<string , set<int>> localResult;
+        
         while (true) {
+            map<string , set<int>> localResult;
             char letter;
             pthread_mutex_lock(&list_file_mutex);
             if (alphabet.empty()) {
@@ -80,19 +83,29 @@ void *threadFunction(void *arg) {
                     localResult[it.first].insert(it.second);
                 }
             }
-            string letterStr = to_string(letter);
+            
+            vector<pair<string, set<int>>> sortedResult;
+            map<string, set<int>>::iterator it;
+            for (it = localResult.begin(); it != localResult.end(); it++) {
+                sortedResult.push_back(make_pair(it->first, it->second));
+            }
+            sort(sortedResult.begin(), sortedResult.end());
             ofstream fout(string(1, letter) + ".txt");
-            for (auto &it : localResult) {
-                fout << it.first << ": [";
-                for (auto &it2 : it.second) {
-                    fout << it2 << " ";
+            vector<pair<string, set<int>>>::iterator it2;
+            set<int>::iterator it3;
+            for(it2 = sortedResult.begin(); it2 != sortedResult.end(); it2++) {
+                fout << it2->first << ": [";
+                for (it3 = it2->second.begin(); it3 != it2->second.end(); it3++) {
+                    fout << *it3;
+                    if (next(it3) != it2->second.end()) {
+                        fout << " ";
+                    }
                 }
-                fout << "]\n";
+                fout << "]" << endl;
             }
             fout.close();
         }
     }
-    pthread_barrier_wait(&barrier);
     pthread_exit(NULL);
 }
 
@@ -108,10 +121,10 @@ int main(int argc, char **argv) {
     ifstream fin(inFileName);
     int numFiles = 0;
     fin >> numFiles;
-    for (int i = 0; i < numFiles; i++) {
+    for (int i = 1; i <= numFiles; i++) {
         string fileName;
         fin >> fileName;
-        inFiles.push(fileName);
+        inFiles.push(make_pair(fileName, i));
     }
     numMap = numMappers;
     numReduce = numReducers;
