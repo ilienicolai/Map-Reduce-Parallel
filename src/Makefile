@@ -1,5 +1,5 @@
 build:
-		g++ main.cpp -o tema1 -lpthread -Wall -g
+		g++ main.cpp -o tema1 -lpthread
 clean:
 		rm tema1
 copy:

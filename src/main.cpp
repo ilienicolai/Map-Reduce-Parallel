@@ -14,7 +14,7 @@ struct thread_data {
     // coada de fisiere de intrare cu id-ul lor
     queue<pair<string, int>> inFiles;
     // rezultatul partial dupa map
-    vector<pair<string, int>> partialResult;
+    vector<map<string, int>> mapperResult;
     // bariera
     pthread_barrier_t barrier;
     // mutex-uri pentru coada de fisiere si rezultatul partial
@@ -55,7 +55,7 @@ void *threadFunction(void *arg) {
             // citire cuvant cu cuvant din fisier
             ifstream fin(fileName);
             string word;
-            vector<pair<string, int>> localResult;
+            map<string, int> locMapRes;
             while (fin >> word) {
                 // determinarea cuvantului fara caractere speciale
                 string word_to_analize;
@@ -66,14 +66,13 @@ void *threadFunction(void *arg) {
                 }
                 // adaugarea cuvantului in rezultatul partial
                 if (word_to_analize.size() > 0) {
-                    localResult.push_back(make_pair(word_to_analize, index));
+                        locMapRes[word_to_analize] = index;
                 }
             }
             // adaugarea rezultatului partial 
             // in vectorul de rezultate partiale dupa map
             pthread_mutex_lock(&(data->add_sol_mutex));
-            data->partialResult.insert(data->partialResult.end(), 
-                                localResult.begin(), localResult.end());
+            data->mapperResult.push_back(locMapRes);
             pthread_mutex_unlock(&(data->add_sol_mutex));
         }
     }
@@ -84,7 +83,7 @@ void *threadFunction(void *arg) {
         
         while (true) {
             // rezultatul local al reducerului
-            map<string , set<int>> localResult;
+            map<string , set<int>> locRes;
             // litera pe care o proceseaza reducerul
             char letter;
             // extragerea literei din coada
@@ -96,21 +95,24 @@ void *threadFunction(void *arg) {
             letter = data->alphabet.front();
             data->alphabet.pop();
             pthread_mutex_unlock(&(data->queue_mutex));
-            // adaugarea in rezultatul local a cuvintelor care incep cu litera letter
-            for (auto &it : data->partialResult) {
-                if (it.first[0] == letter) {
-                    localResult[it.first].insert(it.second);
+            // adaugarea in rezultatul local a cuvintelor care incep cu letter
+            for (auto &it : data->mapperResult) {
+                for (auto &it2 : it) {
+                    if (it2.first[0] == letter) {
+                        locRes[it2.first].insert(it2.second);
+                    }
                 }
             }
             // mutarea rezultatului local in vector 
             // ca sa fie sortat si scris in fisier
             vector<pair<string, set<int>>> sortedResult;
             map<string, set<int>>::iterator it;
-            for (it = localResult.begin(); it != localResult.end(); it++) {
+            for (it = locRes.begin(); it != locRes.end(); it++) {
                 sortedResult.push_back(make_pair(it->first, it->second));
             }
             // sortarea rezultatului local
-            sort(sortedResult.begin(), sortedResult.end(), [](const pair<string, set<int>> &a, const pair<string, set<int>> &b) {
+            sort(sortedResult.begin(), sortedResult.end(), [](const pair<string,
+                                set<int>> &a, const pair<string, set<int>> &b) {
                 if (a.second.size() == b.second.size()) {
                     return a.first < b.first;
                 }
@@ -138,7 +140,7 @@ void *threadFunction(void *arg) {
 
 int main(int argc, char **argv) {
     if (argc < 4) {
-        cout << "Utilizati ./tema1 <numar_mapperi> <numar_reduceri> <fisier_intrare>";
+        cout << "Utilizati 4 argumente" << endl;
         return -1;
     }
     // numarul de mapperi
