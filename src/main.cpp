@@ -10,41 +10,40 @@
 #include <cctype>
 
 using namespace std;
+struct thread_data {
+    queue<pair<string, int>> inFiles;
+    vector<pair<string, int>> partialResult;
+    pthread_barrier_t barrier;
+    pthread_mutex_t list_file_mutex, add_sol_mutex;
+    queue<char> alphabet;
+    int numMap;
+    int numReduce;
+    int *thread_id;
+};
+struct thread_id {
+    struct thread_data *data;
+    int id;
+};
 
-// Global variables
-queue<pair<string, int>> inFiles;
-vector<pair<string, int>> partialResult;
-pthread_barrier_t barrier;
-pthread_mutex_t list_file_mutex, add_sol_mutex;
-queue<char> alphabet;
-int numMap;
-int numReduce;
-
-string normalizeWord(const string& word) {
-    string normalized;
-    for (char c : word) {
-        if (std::isalpha(c)) {
-            normalized += std::tolower(c);
-        }
-    }
-    return normalized;
-}
 
 void *threadFunction(void *arg) {
-    int thread_id = *((int *) arg);
-    if (thread_id < numMap) {
+    struct thread_id *thread = (struct thread_id *)arg;
+    int th_id = thread->id;
+    thread_data *data = thread->data;
+    cout << "Thread " << th_id << " started\n";
+    if (th_id < thread->data->numMap) {
         while (true) {
             string fileName;
             int index;
-            pthread_mutex_lock(&list_file_mutex);
-            if (inFiles.empty()) {
-                pthread_mutex_unlock(&list_file_mutex);
+            pthread_mutex_lock(&(data->list_file_mutex));
+            if (data->inFiles.empty()) {
+                pthread_mutex_unlock(&(data->list_file_mutex));
                 break;
             }
-            fileName = inFiles.front().first;
-            index = inFiles.front().second;
-            inFiles.pop();
-            pthread_mutex_unlock(&list_file_mutex);
+            fileName = data->inFiles.front().first;
+            index = data->inFiles.front().second;
+            data->inFiles.pop();
+            pthread_mutex_unlock(&(data->list_file_mutex));
             ifstream fin(fileName);
             string word;
             vector<pair<string, int>> localResult;
@@ -59,26 +58,26 @@ void *threadFunction(void *arg) {
                     localResult.push_back(make_pair(normalized, index));
                 }
             }
-            pthread_mutex_lock(&add_sol_mutex);
-            partialResult.insert(partialResult.end(), localResult.begin(), localResult.end());
-            pthread_mutex_unlock(&add_sol_mutex);
+            pthread_mutex_lock(&(data->add_sol_mutex));
+            data->partialResult.insert(data->partialResult.end(), localResult.begin(), localResult.end());
+            pthread_mutex_unlock(&(data->add_sol_mutex));
         }
     }
-    pthread_barrier_wait(&barrier);
-    if (thread_id >= numMap) {
+    pthread_barrier_wait(&(data->barrier));
+    if (th_id >= data->numMap) {
         
         while (true) {
             map<string , set<int>> localResult;
             char letter;
-            pthread_mutex_lock(&list_file_mutex);
-            if (alphabet.empty()) {
-                pthread_mutex_unlock(&list_file_mutex);
+            pthread_mutex_lock(&(data->list_file_mutex));
+            if (data->alphabet.empty()) {
+                pthread_mutex_unlock(&(data->list_file_mutex));
                 break;
             }
-            letter = alphabet.front();
-            alphabet.pop();
-            pthread_mutex_unlock(&list_file_mutex);
-            for (auto &it : partialResult) {
+            letter = data->alphabet.front();
+            data->alphabet.pop();
+            pthread_mutex_unlock(&(data->list_file_mutex));
+            for (auto &it : data->partialResult) {
                 if (it.first[0] == letter) {
                     localResult[it.first].insert(it.second);
                 }
@@ -122,6 +121,10 @@ int main(int argc, char **argv) {
     }
     int numMappers = std::stoi(argv[1]);
     int numReducers = std::stoi(argv[2]);
+    struct thread_data data;
+    data.numMap = numMappers;
+    data.numReduce = numReducers;
+    
     string inFileName = argv[3];
     ifstream fin(inFileName);
     int numFiles = 0;
@@ -129,22 +132,23 @@ int main(int argc, char **argv) {
     for (int i = 1; i <= numFiles; i++) {
         string fileName;
         fin >> fileName;
-        inFiles.push(make_pair(fileName, i));
+        data.inFiles.push(make_pair(fileName, i));
     }
-    numMap = numMappers;
-    numReduce = numReducers;
     pthread_t threads[numMappers + numReducers];
     int arguments[numMappers + numReducers];
-    pthread_barrier_init(&barrier, NULL, numMappers + numReducers);
-    pthread_mutex_init(&list_file_mutex, NULL);
-    pthread_mutex_init(&add_sol_mutex, NULL);
+    pthread_barrier_init(&data.barrier, NULL, numMappers + numReducers);
+    pthread_mutex_init(&data.list_file_mutex, NULL);
+    pthread_mutex_init(&data.add_sol_mutex, NULL);
     int rc;
     for (char c = 'a'; c <= 'z'; c++) {
-        alphabet.push(c);
+        data.alphabet.push(c);
     }
     for (int i = 0; i < numMappers + numReducers; i++) {
         arguments[i] = i;
-        rc = pthread_create(&threads[i], NULL, threadFunction, &arguments[i]);
+        struct thread_id *thread = new struct thread_id;
+        thread->data = &data;
+        thread->id = i;
+        rc = pthread_create(&threads[i], NULL, threadFunction, thread);
         if (rc) {
             cout << "Error:unable to create thread," << rc << endl;
             exit(-1);
