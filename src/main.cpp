@@ -89,7 +89,12 @@ void *threadFunction(void *arg) {
             for (it = localResult.begin(); it != localResult.end(); it++) {
                 sortedResult.push_back(make_pair(it->first, it->second));
             }
-            sort(sortedResult.begin(), sortedResult.end());
+            sort(sortedResult.begin(), sortedResult.end(), [](const pair<string, set<int>> &a, const pair<string, set<int>> &b) {
+                if (a.second.size() == b.second.size()) {
+                    return a.first < b.first;
+                }
+                return a.second.size() > b.second.size();
+            });
             ofstream fout(string(1, letter) + ".txt");
             vector<pair<string, set<int>>>::iterator it2;
             set<int>::iterator it3;
