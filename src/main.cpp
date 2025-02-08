@@ -144,9 +144,9 @@ int main(int argc, char **argv) {
         return -1;
     }
     // numarul de mapperi
-    int numMappers = std::stoi(argv[1]);
+    int numMappers = stoi(argv[1]);
     // numarul de reduceri
-    int numReducers = std::stoi(argv[2]);
+    int numReducers = stoi(argv[2]);
     // datele care vor fi trimise thread-urilor
     struct thread_data data;
     data.numMap = numMappers;

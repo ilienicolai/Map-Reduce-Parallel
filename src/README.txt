@@ -25,4 +25,4 @@ cerintei. Am ales sa utilizez un map si apoi sa transfer rezultatul intr-un
 vector pentru a evita cautarea unei perechi de fiecare data cand trebuie sa
 adaug id-ul unui fisier la un cuvant.
 
-In mai astept terminarea tuturor thread-urilor si fac join.
+In main() astept terminarea tuturor thread-urilor si fac join.
